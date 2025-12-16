@@ -32,11 +32,10 @@ jobs:
           NODE_ENV: production
       
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        if: github.ref == 'refs/heads/main'
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./out
-          destination_dir: ./docs
-          cname: false
+          branch: main
+          folder: out
+          target-folder: docs
+          clean: true
 

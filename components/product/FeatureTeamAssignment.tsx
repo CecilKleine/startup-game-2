@@ -144,34 +144,34 @@ export function FeatureTeamAssignment({ feature, open, onClose }: FeatureTeamAss
                 Minimum Seniority: <Chip label={requirements.minSeniority} size="small" />
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                {requirements.requiredEngineers.frontend && (
+                {requirements.requiredEngineers.frontend ? (
                   <Chip 
                     label={`${requirements.requiredEngineers.frontend} Frontend Engineer${requirements.requiredEngineers.frontend > 1 ? 's' : ''}`}
                     color={needsFrontend > 0 ? 'error' : 'success'}
                     size="small"
                   />
-                )}
-                {requirements.requiredEngineers.backend && (
+                ) : null}
+                {requirements.requiredEngineers.backend ? (
                   <Chip 
                     label={`${requirements.requiredEngineers.backend} Backend Engineer${requirements.requiredEngineers.backend > 1 ? 's' : ''}`}
                     color={needsBackend > 0 ? 'error' : 'success'}
                     size="small"
                   />
-                )}
-                {requirements.requiredDesigners.product && (
+                ) : null}
+                {requirements.requiredDesigners.product ? (
                   <Chip 
                     label={`${requirements.requiredDesigners.product} Product Designer${requirements.requiredDesigners.product > 1 ? 's' : ''}`}
                     color={needsProduct > 0 ? 'error' : 'success'}
                     size="small"
                   />
-                )}
-                {requirements.requiredDesigners.visual && (
+                ) : null}
+                {requirements.requiredDesigners.visual ? (
                   <Chip 
                     label={`${requirements.requiredDesigners.visual} Visual Designer${requirements.requiredDesigners.visual > 1 ? 's' : ''}`}
                     color={needsVisual > 0 ? 'error' : 'success'}
                     size="small"
                   />
-                )}
+                ) : null}
               </Box>
               {requirementsMet && (
                 <Alert severity="success" sx={{ mt: 1 }}>

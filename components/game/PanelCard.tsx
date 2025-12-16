@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
-export type PanelType = 'finance' | 'product' | 'team' | 'funding' | 'events';
+export type PanelType = 'finance' | 'product' | 'team' | 'funding' | 'offices';
 
 interface PanelCardProps {
   title: string;

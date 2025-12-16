@@ -18,7 +18,7 @@ export default function Home() {
     >
       <Paper elevation={3} sx={{ p: 4, textAlign: 'center', maxWidth: 600 }}>
         <Typography variant="h3" component="h1" gutterBottom>
-          Startup Game
+          SaaSimulator
         </Typography>
         <Typography variant="h6" color="text.secondary" sx={{ mb: 4 }}>
           A CEO simulation game where you manage product development, hiring, funding, and finances.

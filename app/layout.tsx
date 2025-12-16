@@ -3,7 +3,7 @@ import './globals.css'
 import { MUIThemeProvider } from '@/components/providers/ThemeProvider'
 
 export const metadata: Metadata = {
-  title: 'Startup Game - CEO Simulation',
+  title: 'SaaSimulator',
   description: 'Manage your startup as a CEO',
 }
 

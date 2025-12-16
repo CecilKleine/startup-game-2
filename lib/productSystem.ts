@@ -10,26 +10,77 @@ export function updateProductSystem(product: ProductState, team: TeamState): Pro
   
   // Engineers contribute most to development
   const engineerCount = team.employees.filter(e => e.role === 'engineer' && e.onboardingComplete).length;
-  const baseSpeed = engineerCount * 0.5; // Base speed per engineer per day
-  const productivityMultiplier = 1 + (teamProductivity * 0.1);
   
-  const dailyProgress = baseSpeed * productivityMultiplier;
+  // Base productivity multiplier from team (0.5 to 1.15 typically)
+  const productivityMultiplier = 0.5 + (teamProductivity * 0.1);
   
-  // Update features based on priority, adjusted by complexity
-  const activeFeatures = updated.features.filter(f => f.progress < 100).sort((a, b) => a.priority - b.priority);
+  // Get all features with incomplete components, sorted by priority
+  const activeFeatures = updated.features
+    .filter(f => f.progress < 100)
+    .sort((a, b) => a.priority - b.priority);
   
-  if (activeFeatures.length > 0) {
-    // Primary feature - complexity inversely affects progress (higher complexity = slower)
+  if (activeFeatures.length > 0 && engineerCount > 0) {
+    // Primary feature - work on its components
     const primaryFeature = activeFeatures[0];
-    const complexityFactor = 1 / (primaryFeature.baseComplexity / 5); // Normalize: complexity 5 = 1x, complexity 10 = 0.5x, complexity 2 = 2.5x
-    primaryFeature.progress = Math.min(100, primaryFeature.progress + (dailyProgress * 0.7 * complexityFactor));
+    const incompleteComponents = primaryFeature.components.filter(c => c.progress < 100);
     
-    // Secondary features get less progress, also adjusted by complexity
-    if (activeFeatures.length > 1 && dailyProgress > 1) {
-      const secondaryFeature = activeFeatures[1];
-      const secondaryComplexityFactor = 1 / (secondaryFeature.baseComplexity / 5);
-      secondaryFeature.progress = Math.min(100, secondaryFeature.progress + (dailyProgress * 0.3 * secondaryComplexityFactor));
+    if (incompleteComponents.length > 0) {
+      // Focus on the first incomplete component
+      const activeComponent = incompleteComponents[0];
+      
+      // Calculate realistic progress based on estimatedDays
+      // With 1 engineer at 100% productivity, a component should take its estimatedDays
+      // More engineers = faster, but with diminishing returns (2 engineers ~= 1.7x speed, 3 engineers ~= 2.2x speed)
+      const engineerEfficiency = engineerCount > 1 
+        ? 1 + (engineerCount - 1) * 0.7 // Diminishing returns: 2 engineers = 1.7x, 3 = 2.4x, 4 = 3.1x
+        : 1;
+      
+      // Daily progress = (100% / estimatedDays) * engineerEfficiency * productivityMultiplier
+      // Complexity already baked into estimatedDays, but we can add a small adjustment for very high complexity
+      const complexityAdjustment = activeComponent.baseComplexity > 8 ? 0.9 : 1.0; // Slight slowdown for very complex tasks
+      
+      const baseDailyProgress = (100 / activeComponent.estimatedDays) * engineerEfficiency * productivityMultiplier * complexityAdjustment;
+      
+      // Primary component gets 85% of effort
+      activeComponent.progress = Math.min(100, activeComponent.progress + (baseDailyProgress * 0.85));
+      
+      // Secondary component in same feature gets a bit of progress if we have enough engineers
+      if (incompleteComponents.length > 1 && engineerCount >= 2) {
+        const secondaryComponent = incompleteComponents[1];
+        const secondaryEngineerEfficiency = engineerCount > 2 
+          ? 1 + (engineerCount - 2) * 0.7 
+          : 1;
+        const secondaryComplexityAdjustment = secondaryComponent.baseComplexity > 8 ? 0.9 : 1.0;
+        const secondaryDailyProgress = (100 / secondaryComponent.estimatedDays) * secondaryEngineerEfficiency * productivityMultiplier * secondaryComplexityAdjustment;
+        secondaryComponent.progress = Math.min(100, secondaryComponent.progress + (secondaryDailyProgress * 0.15));
+      }
     }
+    
+    // Secondary feature gets less attention if we have 3+ engineers
+    if (activeFeatures.length > 1 && engineerCount >= 3) {
+      const secondaryFeature = activeFeatures[1];
+      const incompleteComponents = secondaryFeature.components.filter(c => c.progress < 100);
+      if (incompleteComponents.length > 0) {
+        const activeComponent = incompleteComponents[0];
+        // Secondary feature uses engineers 3+ only
+        const secondaryEngineerCount = Math.max(1, engineerCount - 2);
+        const secondaryEngineerEfficiency = secondaryEngineerCount > 1 
+          ? 1 + (secondaryEngineerCount - 1) * 0.7 
+          : 1;
+        const complexityAdjustment = activeComponent.baseComplexity > 8 ? 0.9 : 1.0;
+        const secondaryDailyProgress = (100 / activeComponent.estimatedDays) * secondaryEngineerEfficiency * productivityMultiplier * complexityAdjustment;
+        activeComponent.progress = Math.min(100, activeComponent.progress + (secondaryDailyProgress * 0.3));
+      }
+    }
+    
+    // Update feature progress based on component completion
+    updated.features.forEach(feature => {
+      if (feature.components.length > 0) {
+        const totalComplexity = feature.components.reduce((sum, c) => sum + c.baseComplexity, 0);
+        const weightedProgress = feature.components.reduce((sum, c) => sum + (c.progress * c.baseComplexity), 0);
+        feature.progress = totalComplexity > 0 ? weightedProgress / totalComplexity : 0;
+      }
+    });
   }
   
   // Update overall progress based on feature completion (weighted by complexity)

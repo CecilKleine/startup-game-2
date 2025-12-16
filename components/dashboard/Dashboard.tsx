@@ -15,7 +15,7 @@ export function Dashboard({ onNewGame }: DashboardProps) {
     <Paper elevation={3} sx={{ p: 3, borderRadius: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" component="h1">
-          Startup CEO Dashboard
+          SaaSimulator
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           <GameEngine />

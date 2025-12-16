@@ -10,11 +10,19 @@ export interface ProductTemplate {
   revenuePotential: number; // Multiplier for revenue calculations (1.0-2.0)
 }
 
+export interface ComponentTemplate {
+  id: string;
+  name: string;
+  baseComplexity: number; // 1-10 scale
+  estimatedDays: number; // Estimated development days for this component
+}
+
 export interface FeatureTemplate {
   id: string;
   name: string;
   description: string;
-  baseComplexity: number; // Affects development time (1-10 scale)
+  baseComplexity: number; // Affects development time (1-10 scale) - overall feature complexity
+  components?: ComponentTemplate[]; // Components that make up this feature (optional, will be generated if not provided)
   unlocksCapability?: string; // e.g., "revenue", "analytics", "mobile"
   priority: number; // Default priority order
 }

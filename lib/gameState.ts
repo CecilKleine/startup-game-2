@@ -1,9 +1,12 @@
 import { GameState } from '@/types/game';
 import { TeamState } from '@/types/employee';
-import { ProductState, Feature } from '@/types/product';
+import { ProductState, Feature, FeatureComponent } from '@/types/product';
 import { FundingState } from '@/types/funding';
 import { EventState } from '@/types/events';
+import { OfficeState, OFFICE_TIERS, OfficeTier } from '@/types/office';
+import { CustomerState } from '@/types/customers';
 import { getProductTemplate } from '@/types/productTemplates';
+import { generateComponentsForFeature } from '@/utils/componentGenerator';
 
 export interface InitialGameConfig {
   startingMoney: number;
@@ -24,16 +27,32 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
   if (config.selectedProductId) {
     const template = getProductTemplate(config.selectedProductId);
     if (template) {
-      // Convert feature templates to game features
-      const features: Feature[] = template.features.map(ft => ({
-        id: ft.id,
-        name: ft.name,
-        description: ft.description,
-        progress: 0,
-        priority: ft.priority,
-        baseComplexity: ft.baseComplexity,
-        unlocksCapability: ft.unlocksCapability,
-      }));
+      // Convert feature templates to game features with components
+      const features: Feature[] = template.features.map(ft => {
+        // Generate components for this feature
+        const componentTemplates = ft.components && ft.components.length > 0 
+          ? ft.components 
+          : generateComponentsForFeature(ft.id, ft.name, ft.baseComplexity);
+        
+        const components: FeatureComponent[] = componentTemplates.map(ct => ({
+          id: ct.id,
+          name: ct.name,
+          progress: 0,
+          baseComplexity: ct.baseComplexity,
+          estimatedDays: ct.estimatedDays,
+        }));
+        
+        return {
+          id: ft.id,
+          name: ft.name,
+          description: ft.description,
+          progress: 0,
+          priority: ft.priority,
+          baseComplexity: ft.baseComplexity,
+          components,
+          unlocksCapability: ft.unlocksCapability,
+        };
+      });
       
       initialProduct = {
         overallProgress: 0,
@@ -66,13 +85,37 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
     lastEventTime: 0,
   };
 
+  // Initialize offices - start with coworking space
+  const initialOffices: OfficeState = {
+    offices: [
+      {
+        id: 'office-1',
+        tier: 'coworking',
+        capacity: OFFICE_TIERS.coworking.capacity,
+        monthlyCost: OFFICE_TIERS.coworking.monthlyCost,
+        name: OFFICE_TIERS.coworking.name,
+        description: OFFICE_TIERS.coworking.description,
+      },
+    ],
+    totalCapacity: OFFICE_TIERS.coworking.capacity,
+    totalMonthlyCost: OFFICE_TIERS.coworking.monthlyCost,
+  };
+
+  // Initialize customers
+  const initialCustomers: CustomerState = {
+    totalCustomers: 0,
+    monthlyAcquisitions: 0,
+    monthlyChurn: 0,
+  };
+
   // Start from today's date
   const startDate = new Date();
   
   return {
     money: config.startingMoney,
-    monthlyExpenses: 2000, // Base overhead
+    monthlyExpenses: 2000 + initialOffices.totalMonthlyCost, // Base overhead + office costs
     monthlyRevenue: 0,
+    revenueHistory: [], // Start with empty revenue history
     burnRate: 2000,
     runway: config.startingMoney / 2000,
     currentTime: 0,
@@ -81,6 +124,8 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
     product: initialProduct,
     funding: initialFunding,
     events: initialEvents,
+    offices: initialOffices,
+    customers: initialCustomers,
     isPaused: true,
     gameSpeed: 1,
     gameOver: false,
@@ -126,6 +171,14 @@ function generateInitialCandidates() {
 }
 
 function createDefaultProduct(): ProductState {
+  const defaultComponents: FeatureComponent[] = generateComponentsForFeature('core', 'Core Functionality', 5).map(ct => ({
+    id: ct.id,
+    name: ct.name,
+    progress: 0,
+    baseComplexity: ct.baseComplexity,
+    estimatedDays: ct.estimatedDays,
+  }));
+  
   return {
     overallProgress: 0,
     currentMilestone: 'idea',
@@ -136,7 +189,8 @@ function createDefaultProduct(): ProductState {
         description: 'Basic product features',
         progress: 0,
         priority: 1,
-        baseComplexity: 5, // Medium complexity for default
+        baseComplexity: 5,
+        components: defaultComponents,
       },
     ],
     maturity: 0,

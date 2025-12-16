@@ -9,8 +9,7 @@ import { ProductPanel } from '@/components/product/ProductPanel';
 import { TeamPanel } from '@/components/team/TeamPanel';
 import { FundingPanel } from '@/components/funding/FundingPanel';
 import { FinancePanel } from '@/components/finance/FinancePanel';
-import { EventModal } from '@/components/events/EventModal';
-import { EventHistory } from '@/components/events/EventHistory';
+import { OfficesPanel } from '@/components/offices/OfficesPanel';
 import { useGameState } from '@/components/game/GameStateProvider';
 import { ProductSelectionModal } from '@/components/game/ProductSelectionModal';
 import { PanelGrid } from '@/components/game/PanelGrid';
@@ -39,28 +38,11 @@ function GameOverDialog({ reason }: { reason?: string }) {
 }
 
 function GameContent() {
-  const { gameState, setPaused, selectProduct } = useGameState();
-  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
-  const [previousEventCount, setPreviousEventCount] = React.useState(0);
+  const { gameState, selectProduct } = useGameState();
   const [activePanel, setActivePanel] = useState<PanelType | null>(null);
   
   // Check if product has been selected
   const productSelected = !!gameState.product.productTemplateId;
-  
-  const currentEvent = gameState.events.pendingEvents.find(e => e.id === selectedEvent || selectedEvent === null);
-  
-  React.useEffect(() => {
-    // Auto-pause when a new event appears
-    if (gameState.events.pendingEvents.length > previousEventCount) {
-      setPaused(true);
-      setPreviousEventCount(gameState.events.pendingEvents.length);
-    }
-    
-    // Auto-show first pending event
-    if (gameState.events.pendingEvents.length > 0 && !selectedEvent) {
-      setSelectedEvent(gameState.events.pendingEvents[0].id);
-    }
-  }, [gameState.events.pendingEvents, selectedEvent, previousEventCount, setPaused]);
 
   const handleNewGame = () => {
     window.location.reload();
@@ -88,8 +70,8 @@ function GameContent() {
         return <TeamPanel />;
       case 'funding':
         return <FundingPanel />;
-      case 'events':
-        return <EventHistory />;
+      case 'offices':
+        return <OfficesPanel />;
       default:
         return null;
     }
@@ -106,25 +88,6 @@ function GameContent() {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: 'background.default', display: 'flex', flexDirection: 'column' }}>
-      {currentEvent && (
-        <EventModal
-          event={currentEvent}
-          onClose={() => {
-            setSelectedEvent(null);
-            // Remove the closed event from tracking
-            setPreviousEventCount(gameState.events.pendingEvents.length - 1);
-            // Auto-select next event if available
-            const nextEvent = gameState.events.pendingEvents.find(e => e.id !== currentEvent.id);
-            if (nextEvent) {
-              setSelectedEvent(nextEvent.id);
-            } else {
-              // No more events, allow resuming (player can manually resume)
-              // Keep paused so player can review before continuing
-            }
-          }}
-        />
-      )}
-      
       <Dashboard onNewGame={handleNewGame} />
       
       <Box sx={{ flex: 1, p: 3 }}>

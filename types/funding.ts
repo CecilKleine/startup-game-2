@@ -1,4 +1,4 @@
-export type FundingRoundType = 'seed' | 'seriesA' | 'seriesB' | 'seriesC';
+export type FundingRoundType = 'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD';
 
 export interface FundingOffer {
   id: string;

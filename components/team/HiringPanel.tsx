@@ -15,6 +15,15 @@ export function HiringPanel() {
     const candidate = candidatePool.find(c => c.id === candidateId);
     if (!candidate) return;
     
+    // Check office capacity
+    if (gameState.team.employees.length >= gameState.offices.totalCapacity) {
+      setAlert({
+        title: 'No Office Space',
+        message: `You've reached your office capacity of ${gameState.offices.totalCapacity} employees. Purchase more office space to hire more people.`,
+      });
+      return;
+    }
+    
     const hiringCost = 3000 + candidate.expectedSalary;
     if (gameState.money < hiringCost) {
       setAlert({
@@ -24,7 +33,13 @@ export function HiringPanel() {
       return;
     }
     
-    hireEmployee(candidateId);
+    const success = hireEmployee(candidateId);
+    if (!success) {
+      setAlert({
+        title: 'Hiring Failed',
+        message: 'Unable to hire this candidate. Check office capacity or funds.',
+      });
+    }
   };
 
   if (candidatePool.length === 0) {
@@ -95,9 +110,13 @@ export function HiringPanel() {
                     color="success"
                     fullWidth
                     onClick={() => handleHire(candidate.id)}
-                    disabled={!canAfford}
+                    disabled={!canAfford || gameState.team.employees.length >= gameState.offices.totalCapacity}
                   >
-                    {canAfford ? 'Hire' : 'Insufficient Funds'}
+                    {gameState.team.employees.length >= gameState.offices.totalCapacity 
+                      ? 'Office Full' 
+                      : canAfford 
+                        ? 'Hire' 
+                        : 'Insufficient Funds'}
                   </Button>
                 </Paper>
               </Box>

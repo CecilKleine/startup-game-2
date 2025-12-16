@@ -9,7 +9,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import BuildIcon from '@mui/icons-material/Build';
 import GroupIcon from '@mui/icons-material/Group';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import EventIcon from '@mui/icons-material/Event';
+import BusinessIcon from '@mui/icons-material/Business';
 import { useGameState } from './GameStateProvider';
 
 interface PanelGridProps {
@@ -53,12 +53,12 @@ export function PanelGrid({ onPanelClick }: PanelGridProps) {
       badgeColor: 'warning' as const,
     },
     {
-      type: 'events' as PanelType,
-      title: 'Events',
-      description: 'View past events and decisions',
-      icon: <EventIcon sx={{ fontSize: 32 }} />,
-      badge: `${gameState.events.eventHistory.length} events`,
-      badgeColor: 'secondary' as const,
+      type: 'offices' as PanelType,
+      title: 'Offices',
+      description: 'Manage office space and capacity',
+      icon: <BusinessIcon sx={{ fontSize: 32 }} />,
+      badge: `${gameState.team.employees.length}/${gameState.offices.totalCapacity}`,
+      badgeColor: gameState.team.employees.length >= gameState.offices.totalCapacity ? 'error' as const : 'secondary' as const,
     },
   ];
 

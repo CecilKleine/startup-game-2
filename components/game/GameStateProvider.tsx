@@ -13,9 +13,10 @@ interface GameContextType {
   hireEmployee: (candidateId: string) => boolean;
   fireEmployee: (employeeId: string) => void;
   prioritizeFeature: (featureId: string, priority: number) => void;
-  startFundraising: (roundType: 'seed' | 'seriesA') => void;
+  startFundraising: (roundType: 'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD') => boolean;
   acceptFundingOffer: (offerId: string) => boolean;
   respondToEvent: (eventId: string, optionId: string) => void;
+  purchaseOffice: (tier: 'coworking' | 'small' | 'medium' | 'large') => boolean;
   selectProduct: (productId: string) => void;
 }
 
@@ -91,9 +92,10 @@ export function GameStateProvider({
     setGameState(gameEngine.getState());
   };
 
-  const startFundraising = (roundType: 'seed' | 'seriesA') => {
-    gameEngine.startFundraising(roundType);
+  const startFundraising = (roundType: 'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD') => {
+    const success = gameEngine.startFundraising(roundType);
     setGameState(gameEngine.getState());
+    return success;
   };
 
   const acceptFundingOffer = (offerId: string) => {
@@ -107,6 +109,12 @@ export function GameStateProvider({
     setGameState(gameEngine.getState());
   };
 
+  const purchaseOffice = (tier: 'coworking' | 'small' | 'medium' | 'large') => {
+    const success = gameEngine.purchaseOffice(tier);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
   const selectProduct = (productId: string) => {
     gameEngine.setProductFromTemplate(productId);
     setGameState(gameEngine.getState());
@@ -114,19 +122,20 @@ export function GameStateProvider({
 
   return (
     <GameContext.Provider
-      value={{
-        gameState,
-        gameEngine,
-        setPaused,
-        setGameSpeed,
-        hireEmployee,
-        fireEmployee,
-        prioritizeFeature,
-        startFundraising,
-        acceptFundingOffer,
-        respondToEvent,
-        selectProduct,
-      }}
+          value={{
+            gameState,
+            gameEngine,
+            setPaused,
+            setGameSpeed,
+            hireEmployee,
+            fireEmployee,
+            prioritizeFeature,
+            startFundraising,
+            acceptFundingOffer,
+            respondToEvent,
+            purchaseOffice,
+            selectProduct,
+          }}
     >
       {children}
     </GameContext.Provider>

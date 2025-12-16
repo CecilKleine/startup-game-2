@@ -2,12 +2,15 @@ import { Employee, TeamState } from './employee';
 import { ProductState } from './product';
 import { FundingState } from './funding';
 import { EventState } from './events';
+import { OfficeState } from './office';
+import { CustomerState } from './customers';
 
 export interface GameState {
   // Financial
   money: number;
   monthlyExpenses: number;
   monthlyRevenue: number;
+  revenueHistory: number[]; // Last 12 months of revenue for growth calculation
   burnRate: number;
   runway: number; // Months until out of money
   
@@ -20,6 +23,8 @@ export interface GameState {
   product: ProductState;
   funding: FundingState;
   events: EventState;
+  offices: OfficeState;
+  customers: CustomerState;
   
   // Game status
   isPaused: boolean;

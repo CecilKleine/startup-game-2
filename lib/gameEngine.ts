@@ -1,11 +1,12 @@
 import { GameState } from '@/types/game';
-import { ProductState, Feature } from '@/types/product';
-import { calculateBurnRate, calculateRunway, calculateMonthlyExpenses, calculateTeamProductivity, calculateRevenue } from './calculations';
+import { ProductState, Feature, FeatureComponent } from '@/types/product';
+import { calculateBurnRate, calculateRunway, calculateMonthlyExpenses, calculateTeamProductivity, calculateCustomerAcquisitions, calculateChurnRate, calculateRevenueFromCustomers } from './calculations';
 import { updateProductSystem } from './productSystem';
 import { updateEventSystem } from './eventSystem';
 import { updateFundingSystem } from './fundingSystem';
 import { getProductTemplate } from '@/types/productTemplates';
 import { isNewMonth, isNewWeek, getCurrentGameDate } from '@/utils/dateUtils';
+import { generateComponentsForFeature } from '@/utils/componentGenerator';
 
 export class GameEngine {
   private state: GameState;
@@ -102,9 +103,15 @@ export class GameEngine {
   }
 
   private updateMonthlySystems(): void {
+    // 0. Customer Lifecycle (must happen before revenue calculation)
+    this.updateCustomerLifecycle();
+    
     // 1. Financial Processing
     this.state.money = this.state.money - this.state.monthlyExpenses + this.state.monthlyRevenue;
     this.updateFinancialMetrics();
+    
+    // Update revenue history after calculating revenue
+    this.updateRevenueHistory();
 
     // 2. Team Updates
     // Process pending hires (onboarding completion)
@@ -135,17 +142,19 @@ export class GameEngine {
 
   private updateFinancialMetrics(): void {
     // Recalculate expenses
-    this.state.monthlyExpenses = calculateMonthlyExpenses(this.state.team.employees);
+    this.state.monthlyExpenses = calculateMonthlyExpenses(this.state.team.employees, this.state.offices.totalMonthlyCost);
     
-    // Recalculate revenue with new parameters
-    const salesCount = this.state.team.employees.filter(e => e.role === 'sales' && e.onboardingComplete).length;
-    const marketingCount = this.state.team.employees.filter(e => e.role === 'marketing' && e.onboardingComplete).length;
+    // Get product category from template
+    const productTemplate = this.state.product.productTemplateId 
+      ? getProductTemplate(this.state.product.productTemplateId)
+      : null;
+    const productCategory = productTemplate?.category || 'Productivity';
     
-    this.state.monthlyRevenue = calculateRevenue(
-      this.state.product.currentMilestone, // Use stage instead of maturity
-      this.state.product.productMarketFit,
-      salesCount,
-      marketingCount
+    // Calculate revenue from customers
+    this.state.monthlyRevenue = calculateRevenueFromCustomers(
+      this.state.customers.totalCustomers,
+      this.state.product.currentMilestone,
+      productCategory
     );
 
     // Recalculate burn rate and runway
@@ -157,10 +166,48 @@ export class GameEngine {
     this.state.team.totalProductivity = calculateTeamProductivity(this.state.team.employees);
   }
 
+  private updateRevenueHistory(): void {
+    // Add current month's revenue to history (keeps last 12 months)
+    this.state.revenueHistory.push(this.state.monthlyRevenue);
+    if (this.state.revenueHistory.length > 12) {
+      this.state.revenueHistory.shift(); // Remove oldest month if more than 12
+    }
+  }
+
   private checkProductMilestones(): void {
     // Milestones are now calculated in updateProductSystem based on feature completion
     // This method is kept for compatibility but milestone calculation happens in productSystem.ts
     // No action needed here - stages are updated automatically when features are updated
+  }
+
+  private updateCustomerLifecycle(): void {
+    // Get product category from template
+    const productTemplate = this.state.product.productTemplateId 
+      ? getProductTemplate(this.state.product.productTemplateId)
+      : null;
+    const productCategory = productTemplate?.category || 'Productivity';
+    
+    // Count active sales and marketing employees
+    const salesCount = this.state.team.employees.filter(e => e.role === 'sales' && e.onboardingComplete).length;
+    const marketingCount = this.state.team.employees.filter(e => e.role === 'marketing' && e.onboardingComplete).length;
+    
+    // 1. Calculate new customer acquisitions
+    const monthlyAcquisitions = calculateCustomerAcquisitions(
+      this.state.product.currentMilestone,
+      productCategory,
+      this.state.product.productMarketFit,
+      salesCount,
+      marketingCount
+    );
+    this.state.customers.monthlyAcquisitions = monthlyAcquisitions;
+    
+    // 2. Calculate churn (customers lost)
+    const churnRate = calculateChurnRate(this.state.product.currentMilestone);
+    const customersLost = Math.round(this.state.customers.totalCustomers * churnRate);
+    this.state.customers.monthlyChurn = customersLost;
+    
+    // 3. Update total customer count
+    this.state.customers.totalCustomers = Math.max(0, this.state.customers.totalCustomers + monthlyAcquisitions - customersLost);
   }
 
   private processScheduledEvents(): void {
@@ -205,6 +252,11 @@ export class GameEngine {
     const candidate = this.state.team.candidatePool.find(c => c.id === candidateId);
     if (!candidate) return false;
 
+    // Check office capacity
+    if (this.state.team.employees.length >= this.state.offices.totalCapacity) {
+      return false; // No office space available
+    }
+
     const hiringCost = 3000 + candidate.expectedSalary; // Recruiting fee + first month
     if (this.state.money < hiringCost) return false;
 
@@ -226,6 +278,32 @@ export class GameEngine {
     return true;
   }
 
+  purchaseOffice(tier: 'coworking' | 'small' | 'medium' | 'large'): boolean {
+    const { OFFICE_TIERS } = require('@/types/office');
+    const officeTier = OFFICE_TIERS[tier];
+    const cost = officeTier.monthlyCost * 3; // 3 months upfront payment
+    
+    if (this.state.money < cost) return false;
+    
+    this.state.money -= cost;
+    
+    const newOffice = {
+      id: `office-${Date.now()}`,
+      tier,
+      capacity: officeTier.capacity,
+      monthlyCost: officeTier.monthlyCost,
+      name: officeTier.name,
+      description: officeTier.description,
+    };
+    
+    this.state.offices.offices.push(newOffice);
+    this.state.offices.totalCapacity += officeTier.capacity;
+    this.state.offices.totalMonthlyCost += officeTier.monthlyCost;
+    
+    this.updateFinancialMetrics();
+    return true;
+  }
+
   fireEmployee(employeeId: string): void {
     this.state.team.employees = this.state.team.employees.filter(e => e.id !== employeeId);
     this.updateFinancialMetrics();
@@ -233,15 +311,62 @@ export class GameEngine {
 
   prioritizeFeature(featureId: string, newPriority: number): void {
     const feature = this.state.product.features.find(f => f.id === featureId);
-    if (feature) {
-      feature.priority = newPriority;
-      // Re-sort features by priority
-      this.state.product.features.sort((a, b) => a.priority - b.priority);
+    if (!feature) return;
+    
+    // Clamp priority to valid range
+    const minPriority = 1;
+    const maxPriority = this.state.product.features.length;
+    const targetPriority = Math.max(minPriority, Math.min(maxPriority, newPriority));
+    
+    // If priority didn't change, do nothing
+    if (feature.priority === targetPriority) return;
+    
+    // Find the feature that currently has the target priority
+    const featureToSwap = this.state.product.features.find(f => f.id !== featureId && f.priority === targetPriority);
+    
+    if (featureToSwap) {
+      // Swap priorities
+      const oldPriority = feature.priority;
+      feature.priority = targetPriority;
+      featureToSwap.priority = oldPriority;
+    } else {
+      // No feature at target priority, just update this feature
+      feature.priority = targetPriority;
     }
+    
+    // Re-sort features by priority
+    this.state.product.features.sort((a, b) => a.priority - b.priority);
   }
 
-  startFundraising(roundType: 'seed' | 'seriesA'): void {
-    if (this.state.funding.activeRound) return;
+  startFundraising(roundType: 'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD'): boolean {
+    if (this.state.funding.activeRound) return false;
+
+    // Check revenue requirements for Series A and above
+    if (roundType !== 'seed') {
+      const { getRevenueRequirement } = require('./fundingSystem');
+      const revenueRequirement = getRevenueRequirement(roundType);
+      if (this.state.monthlyRevenue < revenueRequirement) {
+        return false; // Revenue requirement not met
+      }
+    }
+
+    // Check if previous rounds were completed (can't skip rounds)
+    const completedRounds = this.state.funding.rounds.filter(r => r.status === 'completed');
+    const lastCompletedRound = completedRounds[completedRounds.length - 1];
+    
+    const roundOrder: Array<'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD'> = ['seed', 'seriesA', 'seriesB', 'seriesC', 'seriesD'];
+    const roundIndex = roundOrder.indexOf(roundType);
+    
+    if (roundIndex > 0 && !lastCompletedRound) {
+      return false; // Can't start Series A+ without completing seed
+    }
+    
+    if (lastCompletedRound) {
+      const lastRoundIndex = roundOrder.indexOf(lastCompletedRound.roundType);
+      if (roundIndex > lastRoundIndex + 1) {
+        return false; // Can't skip rounds
+      }
+    }
 
     const round = {
       id: `round-${Date.now()}`,
@@ -254,6 +379,7 @@ export class GameEngine {
 
     this.state.funding.activeRound = round;
     this.state.funding.rounds.push(round);
+    return true;
   }
 
   acceptFundingOffer(offerId: string): boolean {
@@ -310,16 +436,32 @@ export class GameEngine {
       return; // Product already selected and development started
     }
 
-    // Convert feature templates to game features
-    const features: Feature[] = template.features.map(ft => ({
-      id: ft.id,
-      name: ft.name,
-      description: ft.description,
-      progress: 0,
-      priority: ft.priority,
-      baseComplexity: ft.baseComplexity,
-      unlocksCapability: ft.unlocksCapability,
-    }));
+    // Convert feature templates to game features with components
+    const features: Feature[] = template.features.map(ft => {
+      // Generate components for this feature
+      const componentTemplates = ft.components && ft.components.length > 0 
+        ? ft.components 
+        : generateComponentsForFeature(ft.id, ft.name, ft.baseComplexity);
+      
+      const components: FeatureComponent[] = componentTemplates.map(ct => ({
+        id: ct.id,
+        name: ct.name,
+        progress: 0,
+        baseComplexity: ct.baseComplexity,
+        estimatedDays: ct.estimatedDays,
+      }));
+      
+      return {
+        id: ft.id,
+        name: ft.name,
+        description: ft.description,
+        progress: 0,
+        priority: ft.priority,
+        baseComplexity: ft.baseComplexity,
+        components,
+        unlocksCapability: ft.unlocksCapability,
+      };
+    });
 
     this.state.product = {
       overallProgress: 0,

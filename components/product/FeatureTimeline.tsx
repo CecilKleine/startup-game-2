@@ -110,7 +110,7 @@ export function FeatureTimeline() {
                     <Box sx={{ mt: 1.5 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                         <Typography variant="caption" color="text.secondary">
-                          Progress
+                          Overall Progress
                         </Typography>
                         <Typography variant="caption" fontWeight="bold">
                           {Math.round(feature.progress)}%
@@ -125,6 +125,65 @@ export function FeatureTimeline() {
                           backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
                         }}
                       />
+                    </Box>
+                  )}
+                  
+                  {/* Components list */}
+                  {feature.components && feature.components.length > 0 && (
+                    <Box sx={{ mt: 2, pl: 2, borderLeft: 2, borderColor: 'divider' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block', fontWeight: 'medium' }}>
+                        Components ({feature.components.filter(c => c.progress >= 100).length}/{feature.components.length} complete)
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {feature.components.map((component) => {
+                          const isComponentComplete = component.progress >= 100;
+                          const isComponentActive = component.progress > 0 && component.progress < 100;
+                          
+                          return (
+                            <Box key={component.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  backgroundColor: isComponentComplete 
+                                    ? 'success.main' 
+                                    : isComponentActive 
+                                      ? 'primary.main' 
+                                      : 'divider',
+                                  flexShrink: 0,
+                                }}
+                              />
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                  <Typography 
+                                    variant="caption" 
+                                    sx={{ 
+                                      color: isComponentComplete ? 'success.main' : 'text.primary',
+                                      fontWeight: isComponentActive ? 'medium' : 'normal',
+                                    }}
+                                  >
+                                    {component.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {Math.round(component.progress)}%
+                                  </Typography>
+                                </Box>
+                                {(isComponentActive || !isComponentComplete) && (
+                                  <LinearProgress 
+                                    variant="determinate" 
+                                    value={component.progress} 
+                                    sx={{ 
+                                      height: 4, 
+                                      borderRadius: 1,
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                          );
+                        })}
+                      </Box>
                     </Box>
                   )}
                   

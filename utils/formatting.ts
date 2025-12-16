@@ -60,3 +60,18 @@ export function formatDate(startDateISO: string, daysElapsed: number): string {
   
   return currentDate.toLocaleDateString('en-US', options);
 }
+
+/**
+ * Format funding round type for display
+ * Converts 'seriesA' -> 'Series A', 'seed' -> 'Seed', etc.
+ */
+export function formatFundingRoundType(roundType: string): string {
+  if (roundType === 'seed') {
+    return 'Seed';
+  }
+  if (roundType.startsWith('series')) {
+    const series = roundType.replace('series', '');
+    return `Series ${series.toUpperCase()}`;
+  }
+  return roundType.charAt(0).toUpperCase() + roundType.slice(1);
+}

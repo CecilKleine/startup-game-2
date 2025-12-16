@@ -20,27 +20,20 @@ export function formatPercentage(value: number, decimals: number = 1): string {
 }
 
 export function formatRunway(months: number): string {
-  if (months < 0) return '0 days';
+  if (months < 0) return '0 months';
   if (months === Infinity) return '∞';
   
-  // Convert fractional months to total days (assuming 30 days per month)
-  const totalDays = Math.floor(months * 30);
-  
-  const years = Math.floor(totalDays / 360);
-  const remainingDaysAfterYears = totalDays % 360;
-  const monthsRemaining = Math.floor(remainingDaysAfterYears / 30);
-  const days = remainingDaysAfterYears % 30;
+  const totalMonths = Math.floor(months);
+  const years = Math.floor(totalMonths / 12);
+  const monthsRemaining = totalMonths % 12;
   
   const parts: string[] = [];
   
   if (years > 0) {
     parts.push(`${years}${years === 1 ? ' year' : ' years'}`);
   }
-  if (monthsRemaining > 0) {
+  if (monthsRemaining > 0 || parts.length === 0) {
     parts.push(`${monthsRemaining}${monthsRemaining === 1 ? ' month' : ' months'}`);
-  }
-  if (days > 0 || parts.length === 0) {
-    parts.push(`${days}${days === 1 ? ' day' : ' days'}`);
   }
   
   return parts.join(', ');

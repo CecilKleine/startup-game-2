@@ -23,5 +23,6 @@ export interface FundingState {
   rounds: FundingRound[];
   activeRound: FundingRound | null;
   totalEquity: number; // Player's equity percentage (starts at 100)
+  cofounderEquity: number; // Co-founder/CTO equity percentage (starts at 0)
   totalRaised: number;
 }

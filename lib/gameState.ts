@@ -7,6 +7,7 @@ import { OfficeState, OFFICE_TIERS, OfficeTier } from '@/types/office';
 import { CustomerState } from '@/types/customers';
 import { getProductTemplate } from '@/types/productTemplates';
 import { generateComponentsForFeature } from '@/utils/componentGenerator';
+import { generateFeatureRequirements } from './featureRequirements';
 
 export interface InitialGameConfig {
   startingMoney: number;
@@ -18,6 +19,7 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
   const initialTeam: TeamState = {
     employees: [],
     candidatePool: generateInitialCandidates(),
+    activeHiringSearches: [],
     totalMonthlySalary: 0,
     totalProductivity: 0,
   };
@@ -51,6 +53,10 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
           baseComplexity: ft.baseComplexity,
           components,
           unlocksCapability: ft.unlocksCapability,
+          requirements: generateFeatureRequirements(ft.baseComplexity),
+          assignedTeam: {
+            employeeIds: [],
+          },
         };
       });
       
@@ -76,6 +82,7 @@ export function createInitialGameState(config: InitialGameConfig): GameState {
     rounds: [],
     activeRound: null,
     totalEquity: 100,
+    cofounderEquity: 0,
     totalRaised: 0,
   };
 
@@ -191,6 +198,10 @@ function createDefaultProduct(): ProductState {
         priority: 1,
         baseComplexity: 5,
         components: defaultComponents,
+        requirements: generateFeatureRequirements(5),
+        assignedTeam: {
+          employeeIds: [],
+        },
       },
     ],
     maturity: 0,

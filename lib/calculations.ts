@@ -32,6 +32,8 @@ function getRoleProductivityMultiplier(role: string): number {
     case 'sales': return 0.5;
     case 'marketing': return 0.4;
     case 'operations': return 0.3;
+    case 'cto': return 1.2; // CTO has high productivity multiplier
+    case 'cofounder': return 1.2; // Co-founder has high productivity multiplier
     default: return 0.5;
   }
 }

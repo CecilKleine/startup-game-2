@@ -1,18 +1,34 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Typography, LinearProgress, Chip, Paper, Button, ButtonGroup, IconButton, Tooltip } from '@mui/material';
 import { useGameState } from '../game/GameStateProvider';
+import { FeatureTeamAssignment } from './FeatureTeamAssignment';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import GroupIcon from '@mui/icons-material/Group';
 
 export function FeatureTimeline() {
   const { gameState, prioritizeFeature } = useGameState();
   const { features } = gameState.product;
+  const [assignmentFeature, setAssignmentFeature] = useState<string | null>(null);
 
   const sortedFeatures = [...features].sort((a, b) => a.priority - b.priority);
+
+  const getRoleDisplayName = (employee: typeof gameState.team.employees[0]): string => {
+    if (employee.role === 'engineer' && employee.roleSubclass) {
+      return employee.roleSubclass === 'frontend' ? 'Frontend' : 'Backend';
+    }
+    if (employee.role === 'designer' && employee.roleSubclass) {
+      return employee.roleSubclass === 'product' ? 'Product' : 'Visual';
+    }
+    if (employee.role === 'cto' || employee.role === 'cofounder') {
+      return 'CTO';
+    }
+    return employee.role.charAt(0).toUpperCase() + employee.role.slice(1);
+  };
 
   return (
     <Box>
@@ -187,6 +203,29 @@ export function FeatureTimeline() {
                     </Box>
                   )}
                   
+                  {/* Assigned Team */}
+                  {feature.assignedTeam.employeeIds.length > 0 && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                        Assigned Team ({feature.assignedTeam.employeeIds.length})
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {feature.assignedTeam.employeeIds.map(empId => {
+                          const employee = gameState.team.employees.find(e => e.id === empId);
+                          if (!employee) return null;
+                          return (
+                            <Chip
+                              key={empId}
+                              label={`${employee.name} (${getRoleDisplayName(employee)})`}
+                              size="small"
+                              variant="outlined"
+                            />
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  )}
+
                   {isComplete && (
                     <Chip
                       label="Complete"
@@ -196,9 +235,18 @@ export function FeatureTimeline() {
                     />
                   )}
                   
-                  {/* Priority controls */}
+                  {/* Priority controls and Assign Team button */}
                   {!isComplete && (
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5, alignItems: 'center' }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<GroupIcon />}
+                        onClick={() => setAssignmentFeature(feature.id)}
+                      >
+                        Assign Team
+                      </Button>
+                      <Box sx={{ flex: 1 }} />
                       <Tooltip title="Increase Priority">
                         <IconButton
                           size="small"
@@ -234,6 +282,15 @@ export function FeatureTimeline() {
           })}
         </Box>
       </Box>
+
+      {/* Feature Team Assignment Modal */}
+      {assignmentFeature && (
+        <FeatureTeamAssignment
+          feature={features.find(f => f.id === assignmentFeature)!}
+          open={!!assignmentFeature}
+          onClose={() => setAssignmentFeature(null)}
+        />
+      )}
     </Box>
   );
 }

@@ -45,3 +45,33 @@ export function getCurrentGameDateFormatted(startDateISO: string, daysElapsed: n
   });
 }
 
+/**
+ * Check if a given date is a weekend (Saturday or Sunday)
+ */
+export function isWeekend(startDateISO: string, daysElapsed: number): boolean {
+  const currentDate = getCurrentGameDate(startDateISO, daysElapsed);
+  const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 6 = Saturday
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
+/**
+ * Count the number of weekdays (Monday-Friday) in a given month
+ */
+export function countWeekdaysInMonth(date: Date): number {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const daysInMonth = getDaysInMonth(date);
+  let weekdays = 0;
+  
+  for (let day = 1; day <= daysInMonth; day++) {
+    const currentDate = new Date(year, month, day);
+    const dayOfWeek = currentDate.getDay();
+    // Count Monday (1) through Friday (5)
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      weekdays++;
+    }
+  }
+  
+  return weekdays;
+}
+

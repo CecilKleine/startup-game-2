@@ -10,7 +10,7 @@ interface GameContextType {
   gameEngine: GameEngine;
   setPaused: (paused: boolean) => void;
   setGameSpeed: (speed: number) => void;
-  hireEmployee: (candidateId: string) => boolean;
+  hireEmployee: (candidateId: string, searchId?: string) => boolean;
   fireEmployee: (employeeId: string) => void;
   prioritizeFeature: (featureId: string, priority: number) => void;
   startFundraising: (roundType: 'seed' | 'seriesA' | 'seriesB' | 'seriesC' | 'seriesD') => boolean;
@@ -18,6 +18,12 @@ interface GameContextType {
   respondToEvent: (eventId: string, optionId: string) => void;
   purchaseOffice: (tier: 'coworking' | 'small' | 'medium' | 'large') => boolean;
   selectProduct: (productId: string) => void;
+  startHiringSearch: (role: string, subclass: string | undefined, recruiterId: string) => boolean;
+  cancelHiringSearch: (searchId: string) => boolean;
+  hireCoFounder: (ctoName: string, equityPercent?: number) => boolean;
+  assignEmployeeToFeature: (employeeId: string, featureId: string) => boolean;
+  unassignEmployeeFromFeature: (employeeId: string, featureId: string) => boolean;
+  autoAssignTeams: () => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -76,8 +82,8 @@ export function GameStateProvider({
     setGameState(gameEngine.getState());
   };
 
-  const hireEmployee = (candidateId: string) => {
-    const success = gameEngine.hireEmployee(candidateId);
+  const hireEmployee = (candidateId: string, searchId?: string) => {
+    const success = gameEngine.hireEmployee(candidateId, searchId);
     setGameState(gameEngine.getState());
     return success;
   };
@@ -120,6 +126,41 @@ export function GameStateProvider({
     setGameState(gameEngine.getState());
   };
 
+  const startHiringSearch = (role: string, subclass: string | undefined, recruiterId: string) => {
+    const success = gameEngine.startHiringSearch(role as any, subclass as any, recruiterId);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
+  const cancelHiringSearch = (searchId: string) => {
+    const success = gameEngine.cancelHiringSearch(searchId);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
+  const hireCoFounder = (ctoName: string, equityPercent?: number) => {
+    const success = gameEngine.hireCoFounder(ctoName, equityPercent);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
+  const assignEmployeeToFeature = (employeeId: string, featureId: string) => {
+    const success = gameEngine.assignEmployeeToFeature(employeeId, featureId);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
+  const unassignEmployeeFromFeature = (employeeId: string, featureId: string) => {
+    const success = gameEngine.unassignEmployeeFromFeature(employeeId, featureId);
+    setGameState(gameEngine.getState());
+    return success;
+  };
+
+  const autoAssignTeams = () => {
+    gameEngine.autoAssignTeams();
+    setGameState(gameEngine.getState());
+  };
+
   return (
     <GameContext.Provider
           value={{
@@ -135,6 +176,12 @@ export function GameStateProvider({
             respondToEvent,
             purchaseOffice,
             selectProduct,
+            startHiringSearch,
+            cancelHiringSearch,
+            hireCoFounder,
+            assignEmployeeToFeature,
+            unassignEmployeeFromFeature,
+            autoAssignTeams,
           }}
     >
       {children}

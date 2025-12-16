@@ -5,8 +5,11 @@ import { updateProductSystem } from './productSystem';
 import { updateEventSystem } from './eventSystem';
 import { updateFundingSystem, getRevenueRequirement } from './fundingSystem';
 import { getProductTemplate } from '@/types/productTemplates';
-import { isNewMonth, isNewWeek } from '@/utils/dateUtils';
+import { isNewMonth, isNewWeek, isWeekend, getCurrentGameDate, countWeekdaysInMonth, getDaysInMonth } from '@/utils/dateUtils';
 import { generateComponentsForFeature } from '@/utils/componentGenerator';
+import { generateFeatureRequirements } from './featureRequirements';
+import { startHiringSearch, updateHiringSearches, completeHiringSearch } from './hiringSystem';
+import { RoleSubclass, EmployeeRole } from '@/types/employee';
 import { OFFICE_TIERS } from '@/types/office';
 
 export class GameEngine {
@@ -83,10 +86,17 @@ export class GameEngine {
   }
 
   private updateDailySystems(): void {
-    // Update product development progress (only if not paused and time is advancing)
-    if (!this.state.isPaused) {
+    // Update product development progress (only if not paused, time is advancing, and it's not a weekend)
+    // Employees don't work on weekends
+    if (!this.state.isPaused && !isWeekend(this.state.startDate, this.state.currentTime)) {
       this.state.product = updateProductSystem(this.state.product, this.state.team);
     }
+    
+    // Update hiring searches (generate candidates over time)
+    this.state.team.activeHiringSearches = updateHiringSearches(
+      this.state.team.activeHiringSearches,
+      this.state.currentTime
+    );
     
     // Process queued player actions (hiring, funding, etc.)
     // This would be handled by actions from UI
@@ -193,13 +203,22 @@ export class GameEngine {
     const marketingCount = this.state.team.employees.filter(e => e.role === 'marketing' && e.onboardingComplete).length;
     
     // 1. Calculate new customer acquisitions
-    const monthlyAcquisitions = calculateCustomerAcquisitions(
+    // Employees don't work on weekends, so scale by weekday ratio
+    const currentDate = getCurrentGameDate(this.state.startDate, this.state.currentTime);
+    const weekdaysInMonth = countWeekdaysInMonth(currentDate);
+    const daysInMonth = getDaysInMonth(currentDate);
+    const weekdayRatio = daysInMonth > 0 ? weekdaysInMonth / daysInMonth : 1;
+    
+    const baseMonthlyAcquisitions = calculateCustomerAcquisitions(
       this.state.product.currentMilestone,
       productCategory,
       this.state.product.productMarketFit,
       salesCount,
       marketingCount
     );
+    
+    // Scale acquisitions by weekday ratio (employees only work weekdays)
+    const monthlyAcquisitions = Math.round(baseMonthlyAcquisitions * weekdayRatio);
     this.state.customers.monthlyAcquisitions = monthlyAcquisitions;
     
     // 2. Calculate churn (customers lost)
@@ -249,10 +268,78 @@ export class GameEngine {
     this.state.gameSpeed = speed;
   }
 
-  hireEmployee(candidateId: string): boolean {
-    const candidate = this.state.team.candidatePool.find(c => c.id === candidateId);
+  hireEmployee(candidateId: string, searchId?: string): boolean {
+    // Try to find candidate in active searches first, then fall back to candidate pool
+    let candidate = null;
+    let search = null;
+    
+    if (searchId) {
+      search = this.state.team.activeHiringSearches.find(s => s.id === searchId);
+      if (search) {
+        candidate = search.candidates.find(c => c.id === candidateId);
+      }
+    }
+    
+    if (!candidate) {
+      candidate = this.state.team.candidatePool.find(c => c.id === candidateId);
+    }
+    
     if (!candidate) return false;
 
+    // Handle co-founder/CTO candidates differently - use hireCoFounder method
+    if (candidate.role === 'cto' || candidate.role === 'cofounder') {
+      // Check if co-founder already exists
+      const existingCofounder = this.state.team.employees.find(e => e.role === 'cto' || e.role === 'cofounder');
+      if (existingCofounder) {
+        return false; // Already have a co-founder
+      }
+
+      // Calculate equity based on when they join
+      const daysSinceStart = this.state.currentTime;
+      let calculatedEquity: number;
+      if (daysSinceStart <= 30) {
+        calculatedEquity = 20 + Math.random() * 5; // 20-25%
+      } else if (daysSinceStart <= 90) {
+        calculatedEquity = 15 + Math.random() * 5; // 15-20%
+      } else {
+        calculatedEquity = 10 + Math.random() * 5; // 10-15%
+      }
+      calculatedEquity = Math.round(calculatedEquity * 10) / 10;
+
+      // Check if player has enough equity
+      if (this.state.funding.totalEquity - calculatedEquity < 0) {
+        return false; // Not enough equity available
+      }
+
+      // No hiring cost for co-founders (they invest time/equity)
+      const cofounder = {
+        id: `cofounder-${Date.now()}`,
+        name: candidate.name,
+        role: 'cto' as const,
+        salary: candidate.expectedSalary,
+        productivity: candidate.productivity,
+        hireDate: this.state.currentTime,
+        onboardingComplete: true, // Co-founders start immediately productive
+        equityPercent: calculatedEquity,
+        experienceLevel: candidate.experienceLevel,
+      };
+
+      this.state.team.employees.push(cofounder);
+      this.state.funding.cofounderEquity = calculatedEquity;
+      this.state.funding.totalEquity -= calculatedEquity;
+      
+      // Remove from candidate pool or search
+      if (search) {
+        search.candidates = search.candidates.filter(c => c.id !== candidateId);
+      } else {
+        this.state.team.candidatePool = this.state.team.candidatePool.filter(c => c.id !== candidateId);
+      }
+      
+      this.updateFinancialMetrics();
+      return true;
+    }
+
+    // Regular employee hiring
     // Check office capacity
     if (this.state.team.employees.length >= this.state.offices.totalCapacity) {
       return false; // No office space available
@@ -267,14 +354,130 @@ export class GameEngine {
       id: `emp-${Date.now()}`,
       name: candidate.name,
       role: candidate.role,
+      roleSubclass: candidate.roleSubclass,
       salary: candidate.expectedSalary,
       productivity: candidate.productivity,
       hireDate: this.state.currentTime,
       onboardingComplete: false,
+      experienceLevel: candidate.experienceLevel,
     };
 
     this.state.team.employees.push(employee);
-    this.state.team.candidatePool = this.state.team.candidatePool.filter(c => c.id !== candidateId);
+    
+    // Remove from candidate pool or search
+    if (search) {
+      search.candidates = search.candidates.filter(c => c.id !== candidateId);
+    } else {
+      this.state.team.candidatePool = this.state.team.candidatePool.filter(c => c.id !== candidateId);
+    }
+    
+    this.updateFinancialMetrics();
+    return true;
+  }
+
+  startHiringSearch(role: EmployeeRole, subclass: RoleSubclass | undefined, recruiterId: string): boolean {
+    // Check if trying to hire CTO when one already exists
+    if (role === 'cto' || role === 'cofounder') {
+      const existingCofounder = this.state.team.employees.find(e => e.role === 'cto' || e.role === 'cofounder');
+      if (existingCofounder) {
+        return false; // Already have a co-founder
+      }
+    }
+
+    // Validate recruiter - only founder (player) or CTO can recruit
+    const recruiter = this.state.team.employees.find(e => e.id === recruiterId);
+    if (!recruiter) {
+      // Player (founder) can always recruit (they don't have an employee record)
+      // Check if it's a valid recruiter ID (could be 'founder' or similar)
+      if (recruiterId !== 'founder') {
+        return false;
+      }
+    } else {
+      // Must be CTO/co-founder
+      if (recruiter.role !== 'cto' && recruiter.role !== 'cofounder') {
+        return false;
+      }
+    }
+
+    // Validate role and subclass combination
+    if ((role === 'engineer' || role === 'designer') && !subclass) {
+      return false; // Engineers and designers require a subclass
+    }
+    if ((role !== 'engineer' && role !== 'designer') && subclass) {
+      return false; // Other roles (except engineer/designer) don't have subclasses
+    }
+
+    // Check if recruiter is already handling too many searches (max 2)
+    const activeSearchesByRecruiter = this.state.team.activeHiringSearches.filter(
+      s => s.recruiterId === recruiterId && s.status === 'active'
+    ).length;
+    if (activeSearchesByRecruiter >= 2) {
+      return false; // Recruiter is too busy
+    }
+
+    const search = startHiringSearch(role, subclass, recruiterId, this.state.currentTime);
+    this.state.team.activeHiringSearches.push(search);
+    return true;
+  }
+
+  cancelHiringSearch(searchId: string): boolean {
+    const search = this.state.team.activeHiringSearches.find(s => s.id === searchId);
+    if (!search || search.status === 'completed') {
+      return false;
+    }
+
+    this.state.team.activeHiringSearches = this.state.team.activeHiringSearches.filter(
+      s => s.id !== searchId
+    );
+    return true;
+  }
+
+  hireCoFounder(ctoName: string, equityPercent?: number): boolean {
+    // Check if co-founder already exists
+    const existingCofounder = this.state.team.employees.find(e => e.role === 'cofounder' || e.role === 'cto');
+    if (existingCofounder) {
+      return false; // Already have a co-founder
+    }
+
+    // Calculate equity based on when they join (earlier = more equity)
+    // Day 0-30: 20-25%, Day 31-90: 15-20%, Day 91+: 10-15%
+    let calculatedEquity = equityPercent;
+    if (!calculatedEquity) {
+      const daysSinceStart = this.state.currentTime;
+      if (daysSinceStart <= 30) {
+        calculatedEquity = 20 + Math.random() * 5; // 20-25%
+      } else if (daysSinceStart <= 90) {
+        calculatedEquity = 15 + Math.random() * 5; // 15-20%
+      } else {
+        calculatedEquity = 10 + Math.random() * 5; // 10-15%
+      }
+      calculatedEquity = Math.round(calculatedEquity * 10) / 10; // Round to 1 decimal
+    }
+
+    // Check if player has enough equity
+    if (this.state.funding.totalEquity - calculatedEquity < 0) {
+      return false; // Not enough equity available
+    }
+
+    // Co-founder salary (typically lower than market, but still substantial)
+    const cofounderSalary = 8000 + Math.random() * 4000; // $8k-$12k/month
+
+    const cofounder = {
+      id: `cofounder-${Date.now()}`,
+      name: ctoName,
+      role: 'cto' as const,
+      salary: cofounderSalary,
+      productivity: 0.9 + Math.random() * 0.1, // High productivity (0.9-1.0)
+      hireDate: this.state.currentTime,
+      onboardingComplete: true, // Co-founders start immediately productive
+      equityPercent: calculatedEquity,
+      experienceLevel: 'senior' as const, // Co-founders are always senior
+    };
+
+    this.state.team.employees.push(cofounder);
+    this.state.funding.cofounderEquity = calculatedEquity;
+    this.state.funding.totalEquity -= calculatedEquity;
+    
     this.updateFinancialMetrics();
     return true;
   }
@@ -404,6 +607,29 @@ export class GameEngine {
     const option = event.options.find(o => o.id === optionId);
     if (!option) return;
 
+    // Handle co-founder equity events specially
+    if (event.id.startsWith('event-cofounder-')) {
+      const cofounder = this.state.team.employees.find(e => e.role === 'cto' || e.role === 'cofounder');
+      if (cofounder) {
+        if (optionId === 'give-equity' && event.title.includes('More Equity')) {
+          // Give 5% more equity
+          const equityIncrease = 5;
+          cofounder.equityPercent = (cofounder.equityPercent || 0) + equityIncrease;
+          this.state.funding.cofounderEquity = cofounder.equityPercent;
+          this.state.funding.totalEquity -= equityIncrease;
+        } else if (optionId === 'give-equity' && event.title.includes('Considering Leaving')) {
+          // Give 3% more equity
+          const equityIncrease = 3;
+          cofounder.equityPercent = (cofounder.equityPercent || 0) + equityIncrease;
+          this.state.funding.cofounderEquity = cofounder.equityPercent;
+          this.state.funding.totalEquity -= equityIncrease;
+        } else if (optionId === 'give-raise' && event.title.includes('Considering Leaving')) {
+          // Increase salary by $3k
+          cofounder.salary += 3000;
+        }
+      }
+    }
+
     // Apply effects
     option.effects.forEach(effect => {
       switch (effect.type) {
@@ -412,6 +638,10 @@ export class GameEngine {
           break;
         case 'expense':
           // Modify employee salaries or expenses
+          // For co-founder raise events, salary already updated above
+          if (!event.id.startsWith('event-cofounder-') || optionId !== 'give-raise') {
+            // Handle other expense effects here if needed
+          }
           break;
         case 'product':
           this.state.product.overallProgress = Math.max(0, Math.min(100, this.state.product.overallProgress + effect.value));
@@ -459,6 +689,10 @@ export class GameEngine {
         baseComplexity: ft.baseComplexity,
         components,
         unlocksCapability: ft.unlocksCapability,
+        requirements: generateFeatureRequirements(ft.baseComplexity),
+        assignedTeam: {
+          employeeIds: [],
+        },
       };
     });
 
@@ -471,6 +705,201 @@ export class GameEngine {
       productMarketFit: 0,
       productTemplateId: template.id,
     };
+  }
+
+  assignEmployeeToFeature(employeeId: string, featureId: string): boolean {
+    const employee = this.state.team.employees.find(e => e.id === employeeId);
+    const feature = this.state.product.features.find(f => f.id === featureId);
+    
+    if (!employee || !feature) return false;
+    
+    // Check if employee is already assigned to another feature
+    if (employee.assignedFeatureId && employee.assignedFeatureId !== featureId) {
+      // Unassign from previous feature
+      const prevFeature = this.state.product.features.find(f => f.id === employee.assignedFeatureId);
+      if (prevFeature) {
+        prevFeature.assignedTeam.employeeIds = prevFeature.assignedTeam.employeeIds.filter(id => id !== employeeId);
+      }
+    }
+    
+    // Assign to new feature
+    if (!feature.assignedTeam.employeeIds.includes(employeeId)) {
+      feature.assignedTeam.employeeIds.push(employeeId);
+    }
+    employee.assignedFeatureId = featureId;
+    
+    return true;
+  }
+
+  unassignEmployeeFromFeature(employeeId: string, featureId: string): boolean {
+    const feature = this.state.product.features.find(f => f.id === featureId);
+    const employee = this.state.team.employees.find(e => e.id === employeeId);
+    
+    if (!feature || !employee) return false;
+    
+    feature.assignedTeam.employeeIds = feature.assignedTeam.employeeIds.filter(id => id !== employeeId);
+    if (employee.assignedFeatureId === featureId) {
+      employee.assignedFeatureId = undefined;
+    }
+    
+    return true;
+  }
+
+  autoAssignTeams(): void {
+    // Get all incomplete features sorted by priority
+    const incompleteFeatures = this.state.product.features
+      .filter(f => f.progress < 100)
+      .sort((a, b) => a.priority - b.priority);
+    
+    // Get all available employees (not assigned or can be reassigned)
+    const availableEmployees = this.state.team.employees.filter(e => e.onboardingComplete);
+    
+    // Track which employees are assigned
+    const assignedEmployeeIds = new Set<string>();
+    
+    // For each feature, try to auto-assign employees matching requirements
+    incompleteFeatures.forEach(feature => {
+      const requirements = feature.requirements;
+      const currentAssignments = feature.assignedTeam.employeeIds;
+      
+      // Count current assignments by type
+      const assignedEngineers = currentAssignments
+        .map(id => availableEmployees.find(e => e.id === id))
+        .filter((e): e is typeof availableEmployees[0] => e !== undefined)
+        .filter(e => e.role === 'engineer' || e.role === 'cto' || e.role === 'cofounder');
+      
+      // CTOs count as both frontend and backend
+      const ctoCount = assignedEngineers.filter(e => e.role === 'cto' || e.role === 'cofounder').length;
+      const frontendOnlyCount = assignedEngineers.filter(e => e.role === 'engineer' && e.roleSubclass === 'frontend').length;
+      const backendOnlyCount = assignedEngineers.filter(e => e.role === 'engineer' && e.roleSubclass === 'backend').length;
+      const currentFrontend = frontendOnlyCount + ctoCount;
+      const currentBackend = backendOnlyCount + ctoCount;
+      
+      const currentDesigners = currentAssignments
+        .map(id => availableEmployees.find(e => e.id === id))
+        .filter((e): e is typeof availableEmployees[0] => e !== undefined)
+        .filter(e => e.role === 'designer');
+      
+      const currentProduct = currentDesigners.filter(e => e.roleSubclass === 'product');
+      const currentVisual = currentDesigners.filter(e => e.roleSubclass === 'visual');
+      
+      // Calculate what's needed for frontend and backend
+      const neededFrontend = Math.max(0, (requirements.requiredEngineers.frontend || 0) - currentFrontend);
+      const neededBackend = Math.max(0, (requirements.requiredEngineers.backend || 0) - currentBackend);
+      
+      // CTOs count as both frontend AND backend simultaneously
+      // Assign CTOs first (they satisfy both requirements at once)
+      // Assign up to the minimum of what's needed for frontend/backend
+      const ctoNeeded = Math.min(neededFrontend, neededBackend);
+      if (ctoNeeded > 0) {
+        const ctoCandidates = availableEmployees
+          .filter(e => 
+            !assignedEmployeeIds.has(e.id) &&
+            (e.role === 'cto' || e.role === 'cofounder') &&
+            meetsSeniorityRequirement(e, requirements.minSeniority)
+          )
+          .sort((a, b) => b.productivity - a.productivity)
+          .slice(0, ctoNeeded);
+        
+        ctoCandidates.forEach(emp => {
+          this.assignEmployeeToFeature(emp.id, feature.id);
+          assignedEmployeeIds.add(emp.id);
+        });
+      }
+      
+      // Recalculate after CTO assignments (CTOs count toward both)
+      const updatedAssignedEngineers = feature.assignedTeam.employeeIds
+        .map(id => availableEmployees.find(e => e.id === id))
+        .filter((e): e is typeof availableEmployees[0] => e !== undefined)
+        .filter(e => e.role === 'engineer' || e.role === 'cto' || e.role === 'cofounder');
+      
+      const updatedCtoCount = updatedAssignedEngineers.filter(e => e.role === 'cto' || e.role === 'cofounder').length;
+      const updatedFrontendOnlyCount = updatedAssignedEngineers.filter(e => e.role === 'engineer' && e.roleSubclass === 'frontend').length;
+      const updatedBackendOnlyCount = updatedAssignedEngineers.filter(e => e.role === 'engineer' && e.roleSubclass === 'backend').length;
+      const updatedCurrentFrontend = updatedFrontendOnlyCount + updatedCtoCount;
+      const updatedCurrentBackend = updatedBackendOnlyCount + updatedCtoCount;
+      const stillNeededFrontend = Math.max(0, (requirements.requiredEngineers.frontend || 0) - updatedCurrentFrontend);
+      const stillNeededBackend = Math.max(0, (requirements.requiredEngineers.backend || 0) - updatedCurrentBackend);
+      
+      // Fill remaining frontend slots with frontend engineers
+      if (stillNeededFrontend > 0) {
+        const frontendCandidates = availableEmployees
+          .filter(e => 
+            !assignedEmployeeIds.has(e.id) &&
+            e.role === 'engineer' &&
+            e.roleSubclass === 'frontend' &&
+            meetsSeniorityRequirement(e, requirements.minSeniority)
+          )
+          .sort((a, b) => b.productivity - a.productivity)
+          .slice(0, stillNeededFrontend);
+        
+        frontendCandidates.forEach(emp => {
+          this.assignEmployeeToFeature(emp.id, feature.id);
+          assignedEmployeeIds.add(emp.id);
+        });
+      }
+      
+      // Fill remaining backend slots with backend engineers
+      if (stillNeededBackend > 0) {
+        const backendCandidates = availableEmployees
+          .filter(e => 
+            !assignedEmployeeIds.has(e.id) &&
+            e.role === 'engineer' &&
+            e.roleSubclass === 'backend' &&
+            meetsSeniorityRequirement(e, requirements.minSeniority)
+          )
+          .sort((a, b) => b.productivity - a.productivity)
+          .slice(0, stillNeededBackend);
+        
+        backendCandidates.forEach(emp => {
+          this.assignEmployeeToFeature(emp.id, feature.id);
+          assignedEmployeeIds.add(emp.id);
+        });
+      }
+      
+      // Assign product designers if needed
+      const neededProduct = (requirements.requiredDesigners.product || 0) - currentProduct.length;
+      if (neededProduct > 0) {
+        const productCandidates = availableEmployees
+          .filter(e => 
+            !assignedEmployeeIds.has(e.id) &&
+            e.role === 'designer' &&
+            e.roleSubclass === 'product' &&
+            meetsSeniorityRequirement(e, requirements.minSeniority)
+          )
+          .sort((a, b) => b.productivity - a.productivity)
+          .slice(0, neededProduct);
+        
+        productCandidates.forEach(emp => {
+          this.assignEmployeeToFeature(emp.id, feature.id);
+          assignedEmployeeIds.add(emp.id);
+        });
+      }
+      
+      // Assign visual designers if needed
+      const neededVisual = (requirements.requiredDesigners.visual || 0) - currentVisual.length;
+      if (neededVisual > 0) {
+        const visualCandidates = availableEmployees
+          .filter(e => 
+            !assignedEmployeeIds.has(e.id) &&
+            e.role === 'designer' &&
+            e.roleSubclass === 'visual' &&
+            meetsSeniorityRequirement(e, requirements.minSeniority)
+          )
+          .sort((a, b) => b.productivity - a.productivity)
+          .slice(0, neededVisual);
+        
+        visualCandidates.forEach(emp => {
+          this.assignEmployeeToFeature(emp.id, feature.id);
+          assignedEmployeeIds.add(emp.id);
+        });
+      }
+    });
+  }
+
+  private meetsSeniorityRequirement(employee: Employee, minSeniority: 'junior' | 'mid' | 'senior'): boolean {
+    const seniorityOrder = { junior: 0, mid: 1, senior: 2 };
+    return seniorityOrder[employee.experienceLevel] >= seniorityOrder[minSeniority];
   }
 
   private calculateInvestorInterest(): number {

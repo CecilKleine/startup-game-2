@@ -1,4 +1,4 @@
-# Startup Game - CEO Simulation
+# SaaSimulator - CEO Simulation
 
 A real-time startup simulation game where you play as a CEO, managing product development, hiring, funding, random events, and finances.
 

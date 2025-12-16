@@ -8,6 +8,18 @@ export interface FeatureComponent {
   estimatedDays: number; // Estimated development time in days (for reference)
 }
 
+export interface FeatureRequirements {
+  minSeniority: 'junior' | 'mid' | 'senior';
+  requiredEngineers: {
+    frontend?: number;
+    backend?: number;
+  };
+  requiredDesigners: {
+    product?: number;
+    visual?: number;
+  };
+}
+
 export interface Feature {
   id: string;
   name: string;
@@ -17,6 +29,10 @@ export interface Feature {
   baseComplexity: number; // 1-10 scale, overall feature complexity
   components: FeatureComponent[]; // Individual components that make up this feature
   unlocksCapability?: string; // e.g., "revenue", "mobile", etc.
+  requirements: FeatureRequirements; // Team requirements for this feature
+  assignedTeam: {
+    employeeIds: string[]; // IDs of employees assigned to this feature
+  };
 }
 
 export interface ProductState {

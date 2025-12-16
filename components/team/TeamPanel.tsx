@@ -49,21 +49,77 @@ export function TeamPanel() {
         <Typography variant="h6" gutterBottom>
           Current Team ({employees.length})
         </Typography>
-        {employees.length === 0 ? (
+        
+        {/* Co-Founders Section */}
+        {employees.filter(e => e.role === 'cto' || e.role === 'cofounder').length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Co-Founders
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              {employees
+                .filter(e => e.role === 'cto' || e.role === 'cofounder')
+                .map((employee) => (
+                  <Box key={employee.id}>
+                    <EmployeeCard
+                      employee={employee}
+                      onFire={fireEmployee}
+                    />
+                  </Box>
+                ))}
+            </Box>
+          </Box>
+        )}
+
+        {/* Grouped by Role */}
+        {['engineer', 'designer', 'sales', 'marketing', 'operations'].map(role => {
+          const roleEmployees = employees.filter(e => e.role === role);
+          if (roleEmployees.length === 0) return null;
+
+          return (
+            <Box key={role} sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                {role.charAt(0).toUpperCase() + role.slice(1)}s ({roleEmployees.length})
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+                {roleEmployees.map((employee) => (
+                  <Box key={employee.id}>
+                    <EmployeeCard
+                      employee={employee}
+                      onFire={fireEmployee}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          );
+        })}
+
+        {/* Unassigned Employees */}
+        {employees.filter(e => !e.assignedFeatureId).length > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+              Available / Unassigned ({employees.filter(e => !e.assignedFeatureId).length})
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+              {employees
+                .filter(e => !e.assignedFeatureId)
+                .map((employee) => (
+                  <Box key={employee.id}>
+                    <EmployeeCard
+                      employee={employee}
+                      onFire={fireEmployee}
+                    />
+                  </Box>
+                ))}
+            </Box>
+          </Box>
+        )}
+
+        {employees.length === 0 && (
           <Typography variant="body2" color="text.secondary">
             No employees yet. Hire your first team member!
           </Typography>
-        ) : (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
-            {employees.map((employee) => (
-              <Box key={employee.id}>
-                <EmployeeCard
-                  employee={employee}
-                  onFire={fireEmployee}
-                />
-              </Box>
-            ))}
-          </Box>
         )}
       </Box>
     </Paper>

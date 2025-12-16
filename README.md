@@ -73,4 +73,4 @@ npm start
 
 This project is configured for GitHub Pages deployment. The GitHub Actions workflow will automatically build and deploy when you push to the `main` branch.
 
-The site will be available at: `https://cecilkleine.github.io/startup-game-2/`
+The site will be available at: `https://cecilkleine.github.io/SaaSimulator/`

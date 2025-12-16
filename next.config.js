@@ -7,8 +7,8 @@ const nextConfig = {
   output: isProduction ? 'export' : undefined,
   // Only use basePath for GitHub Pages deployment
   ...(isGitHubPages && {
-    basePath: '/startup-game-2',
-    assetPrefix: '/startup-game-2',
+    basePath: '/SaaSimulator',
+    assetPrefix: '/SaaSimulator',
   }),
   images: {
     unoptimized: true,
